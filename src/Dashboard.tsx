@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Code, AlertTriangle, CheckCircle, Clock, ArrowRight, BarChart2, Shield, Zap, Download, ExternalLink, Terminal } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
+import { supabase } from './lib/supabase';
+import { useAuth } from './contexts/AuthContext';
 
 type CodeScan = {
   id: string;
@@ -246,7 +246,7 @@ const Dashboard: React.FC = () => {
       )}
       
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-gray-800 rounded-lg p-6">
           <div className="flex items-center space-x-4 mb-4">
             <div className="bg-emerald-500/20 p-3 rounded-full">
@@ -261,6 +261,23 @@ const Dashboard: React.FC = () => {
           >
             <Code className="h-5 w-5 mr-2" />
             New Scan
+          </Link>
+        </div>
+        
+        <div className="bg-gray-800 rounded-lg p-6">
+          <div className="flex items-center space-x-4 mb-4">
+            <div className="bg-purple-500/20 p-3 rounded-full">
+              <Shield className="h-6 w-6 text-purple-400" />
+            </div>
+            <h2 className="text-xl font-bold">Security Tips</h2>
+          </div>
+          <p className="text-gray-400 mb-4">Learn best practices to improve your code security.</p>
+          <Link 
+            to="/security-tips" 
+            className="inline-flex items-center bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            <Shield className="h-5 w-5 mr-2" />
+            View Tips
           </Link>
         </div>
         

@@ -18,6 +18,7 @@ export interface Database {
           language: string
           vulnerabilities: Json[]
           status: string
+          source: string | null
         }
         Insert: {
           id?: string
@@ -27,6 +28,7 @@ export interface Database {
           language: string
           vulnerabilities?: Json[]
           status?: string
+          source?: string | null
         }
         Update: {
           id?: string
@@ -36,6 +38,7 @@ export interface Database {
           language?: string
           vulnerabilities?: Json[]
           status?: string
+          source?: string | null
         }
       }
       vulnerability_fixes: {
@@ -85,6 +88,38 @@ export interface Database {
           email?: string
           full_name?: string
           avatar_url?: string | null
+        }
+      }
+      api_keys: {
+        Row: {
+          id: string
+          user_id: string
+          key: string
+          name: string
+          created_at: string
+          last_used_at: string | null
+          expires_at: string | null
+          revoked: boolean
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          key: string
+          name: string
+          created_at?: string
+          last_used_at?: string | null
+          expires_at?: string | null
+          revoked?: boolean
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          key?: string
+          name?: string
+          created_at?: string
+          last_used_at?: string | null
+          expires_at?: string | null
+          revoked?: boolean
         }
       }
     }
