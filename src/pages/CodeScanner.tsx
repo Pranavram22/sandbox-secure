@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, ArrowRight, Code, Github, Loader } from 'lucide-react';
 
 // OpenRouter API key and endpoint
-const OPENROUTER_API_KEY = "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";
+const OPENROUTER_API_KEY = "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";
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 interface Vulnerability {
@@ -119,66 +119,163 @@ const CodeScanner: React.FC = () => {
 
     console.log("Sending request to OpenRouter API...");
     
-    const response = await fetch(OPENROUTER_API_URL, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "user",
-            content: prompt
+    // Retry logic
+    const maxRetries = 3;
+    let retryCount = 0;
+    let lastError;
+    
+    while (retryCount < maxRetries) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        const response = await fetch(OPENROUTER_API_URL, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OPENROUTER_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: "gpt-3.5-turbo",
+            messages: [
+              {
+                role: "user",
+                content: prompt
+              }
+            ],
+            temperature: 0.2,
+            max_tokens: 2000
+          }),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          const errorBody = await response.text();
+          console.error(`OpenRouter API Error (Attempt ${retryCount + 1}/${maxRetries}):`, errorBody);
+          
+          // Don't retry for auth errors
+          if (response.status === 401) {
+            throw new Error(`Authentication error: Invalid API key`);
           }
-        ],
-        temperature: 0.2,
-        max_tokens: 3000
-      })
-    });
+          
+          // For rate limiting or server errors, retry
+          if (response.status === 429 || response.status >= 500) {
+            retryCount++;
+            lastError = new Error(`API error (${response.status}): ${response.statusText}`);
+            
+            // Wait longer between retries
+            const delay = retryCount * 2000;
+            console.log(`Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          
+          throw new Error(`API error (${response.status}): ${response.statusText}`);
+        }
 
-    if (!response.ok) {
-      console.error("OpenRouter API Error Status:", response.status, response.statusText);
-      const errorBody = await response.text();
-      console.error("OpenRouter API Error Body:", errorBody);
-      throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    console.log("OpenRouter API Response:", data);
-    
-    if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
-      console.error("Invalid OpenRouter API response format", data);
-      throw new Error("Invalid response format from OpenRouter API");
-    }
-    
-    const text = data.choices[0].message.content;
-    console.log("OpenRouter text response:", text);
-    
-    // Extract JSON from response
-    try {
-      const jsonMatch = text.match(/\[\s*\{.*\}\s*\]/s);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        const data = await response.json();
+        console.log("OpenRouter API Response received successfully");
+        
+        if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+          console.error("Invalid OpenRouter API response format", data);
+          throw new Error("Invalid response format from API");
+        }
+        
+        const text = data.choices[0].message.content;
+        
+        // Extract JSON from response with better error handling
+        try {
+          // First try: Direct JSON parse if it's clean JSON
+          if (text.trim().startsWith('[') && text.trim().endsWith(']')) {
+            try {
+              return JSON.parse(text);
+            } catch (e) {
+              console.log("Direct JSON parse failed, trying alternatives");
+            }
+          }
+          
+          // Second try: Find JSON array with regex
+          const jsonMatch = text.match(/\[\s*\{.*\}\s*\]/s);
+          if (jsonMatch) {
+            try {
+              return JSON.parse(jsonMatch[0]);
+            } catch (e) {
+              console.log("JSON regex extraction failed, trying next method");
+            }
+          }
+          
+          // Third try: More general array extraction
+          if (text.includes('[') && text.includes(']')) {
+            const startIdx = text.indexOf('[');
+            const endIdx = text.lastIndexOf(']') + 1;
+            const jsonStr = text.substring(startIdx, endIdx);
+            try {
+              return JSON.parse(jsonStr);
+            } catch (e) {
+              console.log("General array extraction failed, trying fallback parsing");
+            }
+          }
+          
+          // Final attempt: Try to manually extract and construct vulnerability objects
+          console.log("Attempting manual extraction as last resort");
+          
+          // If the response mentions "no vulnerabilities" or similar
+          if (text.toLowerCase().includes("no vulnerabilities") || 
+              text.toLowerCase().includes("no issues") || 
+              text.toLowerCase().includes("empty array")) {
+            return [];
+          }
+          
+          // If we got this far but still couldn't parse, return an empty array
+          console.warn("Could not extract valid vulnerabilities from response");
+          return [];
+        } catch (e) {
+          console.error("Failed to parse response:", e);
+          throw new Error("Failed to parse vulnerability data");
+        }
+      } catch (error: any) {
+        console.error(`Error during attempt ${retryCount + 1}/${maxRetries}:`, error);
+        
+        // For timeout errors, retry
+        if (error.name === 'AbortError') {
+          retryCount++;
+          lastError = new Error("Request timeout. Try again with a simpler or shorter code sample.");
+          
+          if (retryCount < maxRetries) {
+            const delay = retryCount * 2000;
+            console.log(`Request timed out. Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+        } 
+        // For network errors, retry
+        else if (error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+          retryCount++;
+          lastError = new Error("Network error. Please check your internet connection.");
+          
+          if (retryCount < maxRetries) {
+            const delay = retryCount * 2000;
+            console.log(`Network error. Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+        } 
+        // Don't retry for other errors
+        else {
+          throw error;
+        }
       }
-      
-      // If no JSON match with regex, try to find anything that looks like an array
-      if (text.includes('[') && text.includes(']')) {
-        const startIdx = text.indexOf('[');
-        const endIdx = text.lastIndexOf(']') + 1;
-        const jsonStr = text.substring(startIdx, endIdx);
-        return JSON.parse(jsonStr);
-      }
-      
-      // If still no JSON found, return empty array
-      console.warn("No valid JSON found in API response");
-      return [];
-    } catch (e) {
-      console.error("Failed to parse OpenRouter response:", e);
-      console.error("Response text:", text);
-      throw new Error("Failed to parse vulnerability data from API response");
     }
+    
+    // If we exhausted all retries
+    if (lastError) {
+      throw lastError;
+    }
+    
+    // This should never happen, but just in case
+    throw new Error("Failed to analyze code after multiple attempts");
   };
 
   const getSeverityColor = (severity: string) => {
@@ -217,8 +314,8 @@ const CodeScanner: React.FC = () => {
         </button>
       </div>
       
-      {scanMode === 'repo' ? (
-        <div className="mb-4">
+      <div className="mb-4">
+        {scanMode === 'repo' ? (
           <input
             type="text"
             value={repoUrl}
@@ -226,17 +323,15 @@ const CodeScanner: React.FC = () => {
             placeholder="https://github.com/owner/repo"
             className="w-full p-2 border rounded"
           />
-        </div>
-      ) : (
-        <div className="mb-4">
+        ) : (
           <textarea
             value={codeSnippet}
             onChange={(e) => setCodeSnippet(e.target.value)}
             placeholder="Paste your code here..."
             className="w-full h-60 p-2 font-mono border rounded text-black bg-white dark:text-white dark:bg-gray-800"
           />
-        </div>
-      )}
+        )}
+      </div>
       
       <button
         onClick={handleScan}
@@ -264,7 +359,7 @@ const CodeScanner: React.FC = () => {
           <h2 className="text-xl font-bold mb-4">Found {vulnerabilities.length} issues</h2>
           <div className="space-y-4">
             {vulnerabilities.map((vuln, index) => (
-              <div key={index} className="border rounded p-4">
+              <div key={index} className="border rounded p-4 bg-white dark:bg-gray-700 shadow-sm">
                 <div className="flex justify-between">
                   <div className="font-bold flex items-center">
                     <AlertTriangle className="h-4 w-4 text-orange-500 mr-1" />
@@ -275,7 +370,7 @@ const CodeScanner: React.FC = () => {
                   </span>
                 </div>
                 <div className="text-sm mt-1">Line: {vuln.line}</div>
-                <div className="mt-2">{vuln.description}</div>
+                <div className="mt-2 text-black dark:text-white">{vuln.description}</div>
                 <div className="mt-2 text-sm">
                   <strong>Recommendation:</strong> {vuln.recommendation}
                 </div>
@@ -285,21 +380,20 @@ const CodeScanner: React.FC = () => {
         </div>
       )}
       
-      {scanning === false && vulnerabilities.length === 0 && (
-        <div className="mt-6 text-center p-6 bg-gray-100 rounded">
+      {scanning === false && vulnerabilities.length === 0 && !error && (
+        <div className="mt-6 text-center p-6 bg-gray-100 dark:bg-gray-700 rounded">
           {scanMode === 'repo' ? 'Enter a GitHub URL and scan to find issues' : 'Paste code and scan to find issues'}
         </div>
       )}
       
-      {/* Code display section */}
-      {(scanMode === 'code' && codeSnippet) || (scanMode === 'repo' && fileContent) ? (
+      {scanMode === 'repo' && fileContent && (
         <div className="mt-6">
-          <h3 className="text-lg font-bold mb-2">Code Preview</h3>
-          <div className="w-full h-96 bg-gray-100 text-black p-4 rounded-md font-mono text-sm overflow-auto border border-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700">
-            <pre>{scanMode === 'repo' ? fileContent : codeSnippet}</pre>
+          <h3 className="text-lg font-bold mb-2">Repository Code</h3>
+          <div className="w-full max-h-96 bg-gray-100 text-black p-4 rounded-md font-mono text-sm overflow-auto border border-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700">
+            <pre>{fileContent}</pre>
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Code, AlertTriangle, CheckCircle, Clock, ArrowRight, BarChart2, Shield, Zap, Download, ExternalLink, Terminal } from 'lucide-react';
+import { Code, AlertTriangle, CheckCircle, Clock, ArrowRight, BarChart2, Shield, Zap, Download, ExternalLink, Terminal, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -441,6 +441,16 @@ const Dashboard: React.FC = () => {
                   <ExternalLink className="h-4 w-4 ml-2" />
                 </a>
                 
+                <a 
+                  href="https://github.com/Pranavram22/vulnerable_vscode.git"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center"
+                >
+                  Download from GitHub
+                  <ExternalLink className="h-4 w-4 ml-2" />
+                </a>
+                
                 <Link 
                   to="/api-docs"
                   className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center"
@@ -454,7 +464,7 @@ const Dashboard: React.FC = () => {
             
             <div className="border-t border-gray-700 pt-4">
               <p className="text-gray-400 text-sm">
-                Need help setting up the extension? Visit our <Link to="/api-docs" className="text-emerald-400 hover:text-emerald-300" onClick={() => setShowVSCodeModal(false)}>API & Integrations</Link> page for detailed instructions.
+                Need help setting up the extension? Visit our <Link to="/api-docs" className="text-emerald-400 hover:text-emerald-300" onClick={() => setShowVSCodeModal(false)}>API & Integrations</Link> page for detailed instructions or download directly from <a href="https://github.com/Pranavram22/vulnerable_vscode.git" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300">GitHub</a>.
               </p>
             </div>
           </div>
